@@ -1,7 +1,7 @@
 # teleport
 Overly formatted and colorful powershell utility for cd'ing into specific places!
 
-<img width="1333" height="874" alt="image" src="https://github.com/user-attachments/assets/1bb2d125-87f3-4e5e-9b9d-ef0da2dd99db" />
+<img width="1000" height="auto" alt="teleport preview" src="https://github.com/user-attachments/assets/384c33e7-d7d6-4d6c-8209-1f0beb9f31db" />
 
 ### Usage
 ```
