@@ -1,9 +1,10 @@
 function Show-Usage() {
     Write-Host "usage:
-tp <aliasName>
-tp -set <aliasName> <path>
-tp -<delete|remove> <alias1> [...] [...] (at least one required)
-tp -rename <aliasName> <newName>
+tp <alias_name>[/optional_relative_paths]
+tp -<e|ex|exact> <alias_name> (slashes don't cause relative pathing)
+tp -<s|set> <alias_name> <path> (overwrites if existing)
+tp -<d|delete|remove> <alias1> [...] [...] (at least one required)
+tp -rename <alias_name> <new_name>
 tp -<list|ls|l>"
 }
 
@@ -21,18 +22,24 @@ $arg0 = $arg0.ToString()
 # MAIN FILE
 $aliasFile = "$HOME\.tp_aliases"
 
+$EXACTCMD_ALIASES = @(
+    "-e",
+    "-ex",
+    "-exact"
+)
 $SETCMD_ALIASES = @(
+    "-s",
     "-set",
     "-add" # NOTE - this might be a bit misleading because it overwrites, but i have muscle memory to type this lol
 )
 $LISTCMD_ALIASES = @(
-    "-list",
+    "-l",
     "-ls",
-    "-l"
+    "-list"
 )
 $DELCMD_ALIASES = @(
-    "-delete",
     "-d",
+    "-delete",
     "-remove"
 )
 
@@ -69,6 +76,7 @@ function Save-Aliases() {
     }
 }
 
+# scuffed ik but whoever invented the cli argument format is a brick
 switch ($arg0) {
     {$SETCMD_ALIASES.Contains($_)} {
         if ($otherargs.Length -ne 2) {
@@ -106,6 +114,13 @@ switch ($arg0) {
         Write-Host "' -> '" -NoNewline 
         Write-Host -ForegroundColor Magenta $path -NoNewline
         Write-Host "'"
+
+        if ($aliasName.ToString().Contains("/") -or $aliasName.ToString().Contains("\")) {
+            Write-Host -ForegroundColor Green "hint: " -NoNewline 
+            Write-Host "alias contains a slash character, which might be interpreted as a relative path. Use 'tp -<e|ex|exact> " -NoNewline
+            Write-Host -ForegroundColor Blue $aliasName -NoNewline
+            Write-Host "' for this alias or remove slashes."
+        }
 
         Save-Aliases | Out-Null
     }
@@ -163,6 +178,14 @@ switch ($arg0) {
         $aliases_to_paths[$newName] = $aliases_to_paths[$aliasName]
         $aliases_to_paths.Remove($aliasName)
         Save-Aliases | Out-Null
+
+        if ($aliasName.ToString().Contains("/") -or $aliasName.ToString().Contains("\")) {
+            Write-Host -ForegroundColor Green "hint: " -NoNewline
+            Write-Host "alias contains a slash character, which might be interpreted as a relative path. Use 'tp -<e|ex|exact> " -NoNewline
+            Write-Host -ForegroundColor Blue $aliasName -NoNewline
+            Write-Host "' for this alias or remove slashes."
+        }
+
         Write-Host "alias '" -NoNewLine
         Write-Host -ForegroundColor Blue $aliasName -NoNewLine
         Write-Host "' successfully renamed to '" -NoNewLine
@@ -196,30 +219,66 @@ switch ($arg0) {
         }
     }
 
+    # tp to exactly the string passed in, even if it contains slashes
+    {$EXACTCMD_ALIASES.Contains($_)} {
+        if (($otherargs.Length -ne 1)) {
+            Show-Usage | Out-Null
+            exit
+        }
+
+        $exactalias = $otherargs[0]
+
+        if (-not $aliases_to_paths.ContainsKey($exactalias)) {
+            Write-Host -ForegroundColor Red "error: " -NoNewline
+            Write-Host "alias '" -NoNewLine
+            Write-Host -ForegroundColor Blue $exactalias -NoNewLine
+            Write-Host "' doesn't exist"
+            exit
+        }
+
+        $path = $aliases_to_paths[$exactalias]
+        if (-not (Test-Path $path)) {
+            Write-Host -ForegroundColor Red "error: " -NoNewline
+            Write-Host "alias '" -NoNewline
+            Write-Host -ForegroundColor Blue $exactalias -NoNewline
+            Write-Host "' points to nonexistent path '" -NoNewline
+            Write-Host -ForegroundColor Magenta $path -NoNewline
+            Write-Host "'"
+        } else {
+            Set-Location -Path $path
+        }
+    }
+
+    # tp to the alias passed in but delimit using "/" or "\" and apply relative paths
     default {
         if (($otherargs.Length -ne 0) -or ($arg0.ToString().StartsWith("-"))) {
             Show-Usage | Out-Null
             exit
         }
 
-        if (-not $aliases_to_paths.ContainsKey($arg0)) {
+        $base_alias, $rel_path = ($arg0 -split "[/\\]",2)
+
+        if (-not $aliases_to_paths.ContainsKey($base_alias)) {
             Write-Host -ForegroundColor Red "error: " -NoNewline
-            Write-Host "alias '" -NoNewLine 
-            Write-Host -ForegroundColor Blue $arg0 -NoNewLine 
+            Write-Host "alias '" -NoNewLine
+            Write-Host -ForegroundColor Blue $base_alias -NoNewLine
             Write-Host "' doesn't exist"
             exit
         }
 
-        $path = $aliases_to_paths[$arg0]
-        if (-not (Test-Path $path)) {
+        $basepath = $aliases_to_paths[$base_alias]
+        $truepath = Join-Path -Path $basepath -ChildPath $rel_path
+
+        if (-not (Test-Path $truepath)) {
             Write-Host -ForegroundColor Red "error: " -NoNewline
-            Write-Host "alias '" -NoNewline
-            Write-Host -ForegroundColor Blue $arg0 -NoNewline
-            Write-Host "' points to nonexistent path '" -NoNewline
-            Write-Host -ForegroundColor Magenta $path -NoNewline
-            Write-Host "'"
+            Write-Host "path '" -NoNewLine
+            Write-Host -ForegroundColor Blue $base_alias -NoNewLine
+            Write-Host -ForegroundColor Magenta "/${rel_path}" -NoNewLine
+            Write-Host "' does not exist (resolved to '" -NoNewLine
+            Write-Host -ForegroundColor Magenta $truepath -NoNewLine
+            Write-Host "')"
         } else {
-            Set-Location -Path $path
+            Set-Location -Path $truepath
         }
     }        
 }
